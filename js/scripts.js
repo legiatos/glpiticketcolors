@@ -108,5 +108,7 @@ function startMutationObserver() {
  * Point d'entrée si la page est chargée
  */
 $(document).ready(function() {
-	init();
+	if (window.location.pathname === "/glpi/public/front/ticket.php") {
+		init();
+	}
 });

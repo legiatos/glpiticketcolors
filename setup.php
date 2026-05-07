@@ -1,6 +1,6 @@
 <?php
 
-define('COLORTICKETS_VERSION', '1.0.0');
+define('COLORTICKETS_VERSION', '1.0.1');
 
 function plugin_init_colortickets() {
 	global $PLUGIN_HOOKS;

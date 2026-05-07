@@ -1,16 +1,55 @@
-// Fonction pour générer une couleur (la tienne, inchangée)
+/**
+ * Genere une couleur aléatoire pastel
+ */
 function getRandomColor() {
-	var letters = '0123456789ABCDEF';
-	var color = '#';
-	for (var i = 0; i < 6; i++) {
-		color += letters[Math.floor(Math.random() * 16)];
-	}
-	return color;
+	const mix = 180;
+	const r = Math.floor((Math.random() * (255 - mix)) + mix);
+	const g = Math.floor((Math.random() * (255 - mix)) + mix);
+	const b = Math.floor((Math.random() * (255 - mix)) + mix);
+	return `rgb(${r}, ${g}, ${b})`;
 }
 
+let techColorsCache = {};
+let isSaving = false;
 
-window.techColorsCache = {"": ""};
+/**
+ * Charge les couleurs depuis le backend
+ * @returns {Promise<boolean>}
+ */
+async function loadColors() {
+	try {
+		const response = await fetch('/glpi/public/plugins/colortickets/handler/handler.php');
+		if (!response.ok) throw new Error('Erreur réseau');
+		techColorsCache = await response.json();
+		return true;
+	} catch (e) {
+		console.error("Erreur chargement JSON", e);
+		return false;
+	}
+}
 
+/**
+ * Sauvegarde les couleurs dans le backend
+ * @param name
+ * @param color
+ * @returns {Promise<void>}
+ */
+async function saveColor(name, color) {
+	if (isSaving) return;
+	isSaving = true;
+	try {
+		await fetch('/glpi/public/plugins/colortickets/handler/handler.php', {
+			method: 'POST',
+			body: JSON.stringify({ [name]: color })
+		});
+	} finally {
+		isSaving = false;
+	}
+}
+
+/**
+ * Applique les couleurs aux lignes appropriées
+ */
 function applyTechColors() {
 	const table = document.querySelector('table[data-testid="search-results"]');
 	if (!table) return;
@@ -18,64 +57,56 @@ function applyTechColors() {
 	const rows = table.querySelectorAll('tbody tr');
 
 	rows.forEach(row => {
-		// On recupère la cellule
-		const cellTech = row.querySelector('[data-searchopt-content-id="5"]');
-
-		if (cellTech) {
-			const text = cellTech.innerText.trim();
-
-			// S'il y a un technicien
+		const cell = row.querySelector('[data-searchopt-content-id="5"]');
+		if (cell) {
+			const text = cell.innerText.trim();
 			if (text !== "") {
-
-				// Si le technicien n'existe pas, on lui donne une couleur
-				if (!(text in window.techColorsCache)) {
-					window.techColorsCache[text] = getRandomColor();
+				// Si nouveau tech, on attribue et on sauve
+				if (!(text in techColorsCache)) {
+					techColorsCache[text] = getRandomColor();
+					saveColor(text, techColorsCache[text]);
 				}
 
-				let targetColor = window.techColorsCache[text];
-
-				// On applique la couleur sur les cellules
+				let targetColor = techColorsCache[text];
 				Array.from(row.cells).forEach(td => {
-					// On force le fond
 					td.style.setProperty('background-color', targetColor, 'important');
-
-					// On supprime les ombres sinon ca enleve la couleur
+					td.style.setProperty('color', '#000000', 'important');
 					td.style.setProperty('box-shadow', 'none', 'important');
-
-
-				});
-			} else {
-				// Pour les lignes sans personne, on met le style par defaut de bootstrap
-				Array.from(row.cells).forEach(td => {
-					td.style.removeProperty('background-color');
-					td.style.removeProperty('box-shadow');
-					td.style.removeProperty('border-color');
+					td.style.setProperty('background-image', 'none', 'important');
 				});
 			}
 		}
 	});
 }
 
-
-
-(function() {
-	if (document.readyState === 'loading') {
-		// Pour que quand ca a finis de charger on change les couleurs
-		window.addEventListener('DOMContentLoaded', applyTechColors);
-	} else {
+/**
+ * Lanceur principal
+ */
+async function init() {
+	const success = await loadColors();
+	if (success) {
 		applyTechColors();
+		startMutationObserver();
 	}
+}
 
-
-	// On regarde si ca change pour remettre les couleurs quand il faut
+/**
+ * Observe les changement pour garder les couleurs si on trie ou que GLPI actualise
+ */
+function startMutationObserver() {
 	const targetNode = document.getElementById('page');
 	if (targetNode) {
-		const observer = new MutationObserver((mutations) => {
-			// Pour eviter que ca execute le script en boucle
+		const observer = new MutationObserver(() => {
 			clearTimeout(window.glpiColorTimeout);
 			window.glpiColorTimeout = setTimeout(applyTechColors, 300);
 		});
-
 		observer.observe(targetNode, { childList: true, subtree: true });
 	}
-})();
+}
+
+/**
+ * Point d'entrée si la page est chargée
+ */
+$(document).ready(function() {
+	init();
+});

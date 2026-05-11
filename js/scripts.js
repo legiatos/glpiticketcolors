@@ -30,8 +30,8 @@ async function loadColors() {
 
 /**
  * Sauvegarde les couleurs dans le backend
- * @param name
- * @param color
+ * @param name la clé
+ * @param color la couleur (objet RGB)
  * @returns {Promise<void>}
  */
 async function saveColor(name, color) {
@@ -90,14 +90,14 @@ function applyTechColorsKanban() {
 
 		const cards = document.querySelectorAll('.kanban-item');
 		if (cards.length === 0) return;
-
 		cards.forEach(card => {
-			// On prend les équipes
-			const teamIcons = card.querySelectorAll('.kanban-item-team i[title]');
 
+			// On prend les équipes
+			const teamIcons = card.querySelectorAll('.kanban-item-team i[title], .kanban-item-team i[data-bs-original-title]');
 			let teams = [];
 			teamIcons.forEach(icon => {
-				const teamName = icon.getAttribute('title').trim();
+				const text = icon.getAttribute('title') || icon.getAttribute('data-bs-original-title')
+				const teamName = text.trim();
 				if (teamName) {
 					teams.push(teamName);
 				}
@@ -138,36 +138,66 @@ async function init() {
 	const success = await loadColors();
 	if (success) {
 		const urlParams = new URLSearchParams(window.location.search);
-		const isKanban = urlParams.get("as_map") === 0 && urlParams.get("browse") === 0;
 
 		if (window.location.pathname.includes("ticket")) {
+
 			applyTechColorsTickets();
 			applyTechColorsKanban();
-			startMutationObserver();
-
+			startMutationObservers();
 		}
 	}
 }
 
 /**
- * Update de l'observer pour être plus réactif sur le Kanban
+ * Permet de recolorer à chaque changement du DOM
  */
-function startMutationObserver() {
-	const targetNode = document.getElementById('page');
-	if (!targetNode) return;
+function startMutationObservers() {
 
-	const observer = new MutationObserver(() => {
-		clearTimeout(window.glpiColorTimeout);
-		window.glpiColorTimeout = setTimeout(() => {
-			applyTechColorsTickets();
-			applyTechColorsKanban();
-		}, 300);
+	const targetNode =  document.body;
+
+	const observer = new MutationObserver((mutations) => {
+
+		let shouldRefresh = false;
+
+
+		for (let mutation of mutations) {
+			if (mutation.type === 'attributes' && mutation.attributeName==='class') {
+				const isColumn = mutation.target.classList.contains('kanban-column');
+				const isNowOpen = !mutation.target.classList.contains('collapsed');
+
+				if (isColumn && isNowOpen) {
+					shouldRefresh = true;
+					break;
+				}
+			}
+
+			if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+				shouldRefresh = true;
+				break;
+			}
+
+		}
+
+		if (shouldRefresh) {
+			clearTimeout(window.glpiColorTimeout);
+			window.glpiColorTimeout = setTimeout(() => {
+				applyTechColorsKanban();
+			}, 500);
+		}
 	});
 
-	observer.observe(targetNode, { childList: true, subtree: true });
+
+
+
+	observer.observe(targetNode, {
+		childList: true,
+		subtree: true,
+		attributes: true,
+		attributeFilter: ['class', 'style']
+	});
 }
 
-/**
+/*
  * Point d'entrée si la page est chargée
  */
 $(document).ready(function() {

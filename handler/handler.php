@@ -1,9 +1,10 @@
 <?php
-// Chemin vers le JSON par rapport au fichier handler.php
 $file = __DIR__ . '/../js/ressources/colors.json';
+
 
 // Logique de lecture/écriture
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+
 	$currentData = json_decode(file_get_contents($file), true) ?: [];
 	$newEntry = json_decode(file_get_contents('php://input'), true);
 

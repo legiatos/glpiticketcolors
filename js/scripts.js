@@ -50,19 +50,21 @@ async function saveColor(name, color) {
 /**
  * Applique les couleurs aux lignes appropriées
  */
-function applyTechColors() {
+function applyTechColorsTickets() {
 	const table = document.querySelector('table[data-testid="search-results"]');
 	if (!table) return;
 
 	const rows = table.querySelectorAll('tbody tr');
 
 	rows.forEach(row => {
-		const cell = row.querySelector('[data-searchopt-content-id="5"]');
+		const cell = row.querySelector('[data-searchopt-content-id="8"]');
 		if (cell) {
 			const text = cell.innerText.trim();
 			if (text !== "") {
 				// Si nouveau tech, on attribue et on sauve
 				if (!(text in techColorsCache)) {
+
+
 					techColorsCache[text] = getRandomColor();
 					saveColor(text, techColorsCache[text]);
 				}
@@ -80,35 +82,94 @@ function applyTechColors() {
 }
 
 /**
- * Lanceur principal
+ * Applique les couleurs sur la vue Kanban en extrayant les équipes des tooltips
+ */
+function applyTechColorsKanban() {
+	// On cible les cartes du Kanban
+	setTimeout(()=>{
+
+		const cards = document.querySelectorAll('.kanban-item');
+		if (cards.length === 0) return;
+
+		cards.forEach(card => {
+			// On prend les équipes
+			const teamIcons = card.querySelectorAll('.kanban-item-team i[title]');
+
+			let teams = [];
+			teamIcons.forEach(icon => {
+				const teamName = icon.getAttribute('title').trim();
+				if (teamName) {
+					teams.push(teamName);
+				}
+			});
+
+
+			// Si il y a des équipes, on colore
+			if (teams.length > 0) {
+				const teamKey = teams.sort().join("\n");
+
+				// Gestion des couleurs
+				if (!(teamKey in techColorsCache)) {
+					techColorsCache[teamKey] = getRandomColor();
+					saveColor(teamKey, techColorsCache[teamKey]);
+				}
+
+				const targetColor = techColorsCache[teamKey];
+
+				card.style.setProperty('background-color', targetColor, 'important');
+
+				card.style.setProperty('color', '#000000', 'important');
+
+				card.style.setProperty('box-shadow', 'none', 'important');
+
+				const cardBody = card.querySelector('.kanban-item.card');
+				if (cardBody) {
+					cardBody.style.setProperty('background-color', 'transparent', 'important');
+				}
+			}
+		});
+	}, 500);
+}
+
+/**
+ * Point d'entrée du script
  */
 async function init() {
 	const success = await loadColors();
 	if (success) {
-		applyTechColors();
-		startMutationObserver();
+		const urlParams = new URLSearchParams(window.location.search);
+		const isKanban = urlParams.get("as_map") === 0 && urlParams.get("browse") === 0;
+
+		if (window.location.pathname.includes("ticket")) {
+			applyTechColorsTickets();
+			applyTechColorsKanban();
+			startMutationObserver();
+
+		}
 	}
 }
 
 /**
- * Observe les changement pour garder les couleurs si on trie ou que GLPI actualise
+ * Update de l'observer pour être plus réactif sur le Kanban
  */
 function startMutationObserver() {
 	const targetNode = document.getElementById('page');
-	if (targetNode) {
-		const observer = new MutationObserver(() => {
-			clearTimeout(window.glpiColorTimeout);
-			window.glpiColorTimeout = setTimeout(applyTechColors, 300);
-		});
-		observer.observe(targetNode, { childList: true, subtree: true });
-	}
+	if (!targetNode) return;
+
+	const observer = new MutationObserver(() => {
+		clearTimeout(window.glpiColorTimeout);
+		window.glpiColorTimeout = setTimeout(() => {
+			applyTechColorsTickets();
+			applyTechColorsKanban();
+		}, 300);
+	});
+
+	observer.observe(targetNode, { childList: true, subtree: true });
 }
 
 /**
  * Point d'entrée si la page est chargée
  */
 $(document).ready(function() {
-	if (window.location.pathname === "/glpi/public/front/ticket.php") {
-		init();
-	}
+	init();
 });

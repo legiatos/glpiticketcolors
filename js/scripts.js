@@ -61,10 +61,8 @@ function applyTechColorsTickets() {
 		if (cell) {
 			const text = cell.innerText.trim();
 			if (text !== "") {
-				// Si nouveau tech, on attribue et on sauve
+				// Si nouveau group, on attribue et on sauve
 				if (!(text in techColorsCache)) {
-
-
 					techColorsCache[text] = getRandomColor();
 					saveColor(text, techColorsCache[text]);
 				}
@@ -82,7 +80,7 @@ function applyTechColorsTickets() {
 }
 
 /**
- * Applique les couleurs sur la vue Kanban en extrayant les équipes des tooltips
+ * Applique les couleurs sur la vue Kanban en extrayant les équipes
  */
 function applyTechColorsKanban() {
 	// On cible les cartes du Kanban
@@ -138,7 +136,6 @@ async function init() {
 	const success = await loadColors();
 	if (success) {
 		const urlParams = new URLSearchParams(window.location.search);
-
 		if (window.location.pathname.includes("ticket")) {
 
 			applyTechColorsTickets();
@@ -153,40 +150,48 @@ async function init() {
  */
 function startMutationObservers() {
 
-	const targetNode =  document.body;
+	const targetNode = document.querySelector(".table-responsive-lg") || document.body;
 
+	// A chaque fois qu'il y a un changement, on prend la liste des changements
+	// /!\ A chaque fois que ca s'actualise tout seul et qu'il ny a pas dechangements, les couleurs disparaissent
 	const observer = new MutationObserver((mutations) => {
-
 		let shouldRefresh = false;
 
-
+		// Pour chaque changement
 		for (let mutation of mutations) {
+			// Si la mutation touche la class
 			if (mutation.type === 'attributes' && mutation.attributeName==='class') {
+
+				// Si on ouvre une colonne
 				const isColumn = mutation.target.classList.contains('kanban-column');
 				const isNowOpen = !mutation.target.classList.contains('collapsed');
 
 				if (isColumn && isNowOpen) {
+					// On doit refresh
 					shouldRefresh = true;
 					break;
 				}
 			}
 
+			// Si on ajoute des trucs (des tickets dans ce cas là
 			if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+				// On doit refresh
 				shouldRefresh = true;
 				break;
 			}
 
 		}
 
+
+		// On refresh
 		if (shouldRefresh) {
 			clearTimeout(window.glpiColorTimeout);
 			window.glpiColorTimeout = setTimeout(() => {
 				applyTechColorsKanban();
+				applyTechColorsTickets();
 			}, 500);
 		}
 	});
-
-
 
 
 	observer.observe(targetNode, {
